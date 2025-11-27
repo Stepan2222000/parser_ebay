@@ -1,0 +1,27 @@
+[project]
+name = "ebay"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    'setuptools', 
+    'wheel',
+    'bs4',
+    'lxml',
+    'asyncpg',
+    "openpyxl",
+    "sqlalchemy",
+    "undetected-playwright-patch>=1.40.0.post1700587210000",
+    "taskiq-nats",
+    "taskiq",
+    "asyncio-pool",
+    "redis",
+    "python-dotenv",
+    "taskiq-redis",
+    "aiohttp",
+    "tqdm",
+    "numpy",
+    "pandas",
+    "psycopg2-binary",
+]

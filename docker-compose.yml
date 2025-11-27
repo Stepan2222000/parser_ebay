@@ -1,0 +1,114 @@
+
+services:
+  redis:
+    image: redis
+    restart: always
+    # no host port mapping to avoid local conflicts
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+  redis-bootstrap:
+    build: .
+    volumes:
+      - .:/opt/app/
+    environment:
+      INTERNAL_REDIS_HOST: redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python3", "bootstrap_internal_redis.py"]
+  nats:
+    image: nats
+    restart: always
+    hostname: nats
+  nats2:
+    image: nats
+    restart: always
+    hostname: nats2
+  app-worker-cl:
+    build: .
+    volumes:
+      - .:/opt/app/
+    restart: always
+    depends_on:
+      redis-bootstrap:
+        condition: service_completed_successfully
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5g"
+        max-file: "3"
+    environment:
+      TZ: Europe/Moscow
+      EXCEL_VERBOSE: "1"
+      DEBUG_REQUESTS: "1"
+      RECHECK_TITLES: "${RECHECK_TITLES:-0}"
+      RECHECK_TITLES_LOG: "${RECHECK_TITLES_LOG:-0}"
+      DB_BATCH_SIZE: "1"
+      DB_BATCH_DELAY: "0.05"
+      PACKAGE_COMMIT_TIMEOUT: "300"
+      HEARTBEAT_ENABLED: "1"
+      HEARTBEAT_INTERVAL: "600"
+      HEARTBEAT_TTL: "900"
+      HEARTBEAT_WORKER_ID: "cl_main"
+      HEARTBEAT_LOG_FILE: "heartbeat.log"
+      DUPLICATE_CACHE_ENABLED: "${DUPLICATE_CACHE_ENABLED:-0}"
+      DUPLICATE_CACHE_FILE: "${DUPLICATE_CACHE_FILE:-duplicate_cache.txt}"
+      DUPLICATE_CACHE_LOG_FILE: "${DUPLICATE_CACHE_LOG_FILE:-duplicate_cache.log}"
+      # Optional: override log files (defaults are /opt/app/requests_*.log)
+      # REQUEST_LOG_AIOHTTP: "/opt/app/requests_aiohttp.log"
+      # REQUEST_LOG_PLAYWRIGHT: "/opt/app/requests_playwright.log"
+    command: [
+      "taskiq", "worker", "main:broker_cl",
+      "--workers", "20", "--max-async-tasks", "2"
+    ]
+  app-worker-pw:
+    build: .
+    volumes:
+      - .:/opt/app/
+    restart: always
+    depends_on:
+      redis-bootstrap:
+        condition: service_completed_successfully
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1g"
+        max-file: "2"
+    environment:
+      TZ: Europe/Moscow
+      DEBUG_REQUESTS: "1"
+      RECHECK_TITLES: "${RECHECK_TITLES:-0}"
+      RECHECK_TITLES_LOG: "${RECHECK_TITLES_LOG:-0}"
+      PACKAGE_COMMIT_TIMEOUT: "300"
+      DUPLICATE_CACHE_ENABLED: "${DUPLICATE_CACHE_ENABLED:-0}"
+      DUPLICATE_CACHE_FILE: "${DUPLICATE_CACHE_FILE:-duplicate_cache.txt}"
+      DUPLICATE_CACHE_LOG_FILE: "${DUPLICATE_CACHE_LOG_FILE:-duplicate_cache.log}"
+      # REQUEST_LOG_PLAYWRIGHT: "/opt/app/requests_playwright.log"
+    command: [
+      "taskiq", "worker", "main:broker_pw",
+      "--workers", "50", "--max-async-tasks", "2", "--log-level=DEBUG"
+    ]
+  app-main:
+    build: .
+    volumes:
+      - .:/opt/app/
+    restart: always
+    depends_on:
+      redis-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      TZ: Europe/Moscow
+      EXCEL_PATH: ${EXCEL_PATH:-/opt/app/iee.xlsx}
+      EXCEL_VERBOSE: "1"  # включить подробные логи при необходимости
+      DEBUG_REQUESTS: "1"
+      RECHECK_TITLES: "${RECHECK_TITLES:-0}"
+      RECHECK_TITLES_LOG: "${RECHECK_TITLES_LOG:-0}"
+      DB_BATCH_SIZE: "1"
+      DB_BATCH_DELAY: "0.05"
+      PACKAGE_COMMIT_TIMEOUT: "300"
+      # REQUEST_LOG_AIOHTTP: "/opt/app/requests_aiohttp.log"
+    command: ["python3", "main_excel.py"]
