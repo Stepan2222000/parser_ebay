@@ -90,6 +90,7 @@ class PackageCommit:
         delivery_price: float,
         seller: str,
         _cycle: int,
+        description: str | None = None,
     ) -> int:
         builder = _PendingBuilder(
             item={
@@ -103,6 +104,7 @@ class PackageCommit:
                 "delivery_price": delivery_price,
                 "seller": seller,
                 "cycle": _cycle,
+                "description": description,
             },
             specifics=[],
         )
@@ -227,11 +229,11 @@ class PackageCommit:
                         insert into ebay (
                             query, price, price_without_delivery,
                             number, location, condition,
-                            title, delivery_price, seller, cycle
+                            title, delivery_price, seller, cycle, description
                         ) values (
                             :query, :price, :price_without_delivery,
                             :number, :location, :condition,
-                            :title, :delivery_price, :seller, :cycle
+                            :title, :delivery_price, :seller, :cycle, :description
                         ) returning (id)
                         """
                     )
@@ -318,11 +320,11 @@ class PackageCommit:
                                 insert into ebay (
                                     query, price, price_without_delivery,
                                     number, location, condition,
-                                    title, delivery_price, seller, cycle
+                                    title, delivery_price, seller, cycle, description
                                 ) values (
                                     :query, :price, :price_without_delivery,
                                     :number, :location, :condition,
-                                    :title, :delivery_price, :seller, :cycle
+                                    :title, :delivery_price, :seller, :cycle, :description
                                 ) returning (id)
                                 """
                             ),

@@ -47,6 +47,16 @@ try:
     from .blocked_title_filter import check_title, log_block, passes_whitelist  # package mode
 except Exception:  # pragma: no cover - top-level script execution
     from blocked_title_filter import check_title, log_block, passes_whitelist  # type: ignore
+try:
+    from .blocked_description_filter import (
+        check_description,
+        log_block as log_block_desc,
+    )  # package mode
+except Exception:  # pragma: no cover - top-level script execution
+    from blocked_description_filter import (  # type: ignore
+        check_description,
+        log_block as log_block_desc,
+    )
 from package_commit import (
     DataBase,
     PackageCommit,
@@ -543,6 +553,13 @@ class HtmlParse1(_HtmlParse):
             lambda: self.html.find("iframe", {"id": "desc_ifr"})["src"]
         )
 
+    @property
+    def short_description(self) -> Optional[str]:
+        """Извлекает короткое описание из meta-тега."""
+        return get_element(
+            lambda: self.html.find("meta", {"name": "description"})["content"]
+        )
+
 
 class HtmlParse2(HtmlParse1):
     @property
@@ -670,6 +687,22 @@ async def product(session: ClientSession, item_id: str, query: str, this_cycle: 
 
             html = HtmlParse(_text)
 
+            # Проверка описания на стоп-слова
+            short_desc = html.short_description
+            blocked_by_desc, matched_desc_word = check_description(short_desc)
+            if blocked_by_desc:
+                log_block_desc(item_id, matched_desc_word, short_desc or "")
+                if excel_log.enabled():
+                    excel_log.log_event(
+                        'product_skip',
+                        item_id=item_id,
+                        query=query,
+                        stage='blocked_description',
+                        reason=matched_desc_word,
+                    )
+                logging.info("Skip item %s by blocked description word: %s", item_id, matched_desc_word)
+                return
+
             # ВРЕМЕННО
             xpath_value: Optional[str] = None
             try:
@@ -718,7 +751,8 @@ async def product(session: ClientSession, item_id: str, query: str, this_cycle: 
                     title=__title[:255] if __title else None,
                     delivery_price=__delivery,
                     seller=html.seller,
-                    _cycle=this_cycle
+                    _cycle=this_cycle,
+                    description=short_desc[:10000] if short_desc else None,
                 )
                 # Collect item specifics to DB and for stream payload
                 inner_payload: dict[str, Any] = {
@@ -730,6 +764,7 @@ async def product(session: ClientSession, item_id: str, query: str, this_cycle: 
                     "price": str(__price),
                     "price_without_delivery": str(__price_without_delivery),
                     "seller": html.seller,
+                    "description": short_desc,
                 }
                 if html.html.find('dl'):
                     for item in html.html.find_all('dl'):
